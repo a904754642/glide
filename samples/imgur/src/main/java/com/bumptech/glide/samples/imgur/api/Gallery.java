@@ -7,13 +7,11 @@ import java.util.List;
  *
  * <p>Populated automatically by GSON.
  */
-public final class Gallery {
+final class Gallery {
   public List<Image> data;
 
   @Override
   public String toString() {
-    return "Gallery{"
-        + "data=" + data
-        + '}';
+    return "Gallery{" + "data=" + data + '}';
   }
 }

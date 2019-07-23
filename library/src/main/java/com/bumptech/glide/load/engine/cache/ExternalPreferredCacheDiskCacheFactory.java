@@ -1,7 +1,7 @@
 package com.bumptech.glide.load.engine.cache;
 
 import android.content.Context;
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
 import java.io.File;
 
 /**
@@ -11,53 +11,59 @@ import java.io.File;
  *
  * <p><b>Images can be read by everyone when using external disk cache.</b>
  */
+// Public API.
+@SuppressWarnings({"unused", "WeakerAccess"})
 public final class ExternalPreferredCacheDiskCacheFactory extends DiskLruCacheFactory {
 
   public ExternalPreferredCacheDiskCacheFactory(Context context) {
-    this(context, DiskCache.Factory.DEFAULT_DISK_CACHE_DIR,
+    this(
+        context,
+        DiskCache.Factory.DEFAULT_DISK_CACHE_DIR,
         DiskCache.Factory.DEFAULT_DISK_CACHE_SIZE);
   }
 
-  public ExternalPreferredCacheDiskCacheFactory(Context context, int diskCacheSize) {
+  public ExternalPreferredCacheDiskCacheFactory(Context context, long diskCacheSize) {
     this(context, DiskCache.Factory.DEFAULT_DISK_CACHE_DIR, diskCacheSize);
   }
 
-  public ExternalPreferredCacheDiskCacheFactory(final Context context, final String diskCacheName,
-                                                final int diskCacheSize) {
-    super(new CacheDirectoryGetter() {
-      @Nullable
-      private File getInternalCacheDirectory() {
-        File cacheDirectory = context.getCacheDir();
-        if (cacheDirectory == null) {
-          return null;
-        }
-        if (diskCacheName != null) {
-          return new File(cacheDirectory, diskCacheName);
-        }
-        return cacheDirectory;
-      }
+  public ExternalPreferredCacheDiskCacheFactory(
+      final Context context, final String diskCacheName, final long diskCacheSize) {
+    super(
+        new CacheDirectoryGetter() {
+          @Nullable
+          private File getInternalCacheDirectory() {
+            File cacheDirectory = context.getCacheDir();
+            if (cacheDirectory == null) {
+              return null;
+            }
+            if (diskCacheName != null) {
+              return new File(cacheDirectory, diskCacheName);
+            }
+            return cacheDirectory;
+          }
 
-      @Override
-      public File getCacheDirectory() {
-        File internalCacheDirectory = getInternalCacheDirectory();
+          @Override
+          public File getCacheDirectory() {
+            File internalCacheDirectory = getInternalCacheDirectory();
 
-        // Already used internal cache, so keep using that one,
-        // thus avoiding using both external and internal with transient errors.
-        if ((null != internalCacheDirectory) && internalCacheDirectory.exists()) {
-          return internalCacheDirectory;
-        }
+            // Already used internal cache, so keep using that one,
+            // thus avoiding using both external and internal with transient errors.
+            if ((null != internalCacheDirectory) && internalCacheDirectory.exists()) {
+              return internalCacheDirectory;
+            }
 
-        File cacheDirectory = context.getExternalCacheDir();
+            File cacheDirectory = context.getExternalCacheDir();
 
-        // Shared storage is not available.
-        if (cacheDirectory == null) {
-          return internalCacheDirectory;
-        }
-        if (diskCacheName != null) {
-          return new File(cacheDirectory, diskCacheName);
-        }
-        return cacheDirectory;
-      }
-    }, diskCacheSize);
+            // Shared storage is not available.
+            if ((cacheDirectory == null) || (!cacheDirectory.canWrite())) {
+              return internalCacheDirectory;
+            }
+            if (diskCacheName != null) {
+              return new File(cacheDirectory, diskCacheName);
+            }
+            return cacheDirectory;
+          }
+        },
+        diskCacheSize);
   }
 }

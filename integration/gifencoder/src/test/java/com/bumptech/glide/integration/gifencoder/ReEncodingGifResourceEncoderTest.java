@@ -3,7 +3,6 @@ package com.bumptech.glide.integration.gifencoder;
 import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assume.assumeTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
@@ -43,20 +42,18 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 
-/**
- * Tests for {@link com.bumptech.glide.integration.gifencoder.ReEncodingGifResourceEncoder}.
- */
+/** Tests for {@link com.bumptech.glide.integration.gifencoder.ReEncodingGifResourceEncoder}. */
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest = Config.NONE, sdk = 18)
 public class ReEncodingGifResourceEncoderTest {
-  @Mock Resource<GifDrawable> resource;
-  @Mock GifDecoder decoder;
-  @Mock GifHeaderParser parser;
-  @Mock AnimatedGifEncoder gifEncoder;
-  @Mock Resource<Bitmap> frameResource;
-  @Mock GifDrawable gifDrawable;
-  @Mock Transformation<Bitmap> frameTransformation;
-  @Mock Resource<Bitmap> transformedResource;
+  @Mock private Resource<GifDrawable> resource;
+  @Mock private GifDecoder decoder;
+  @Mock private GifHeaderParser parser;
+  @Mock private AnimatedGifEncoder gifEncoder;
+  @Mock private Resource<Bitmap> frameResource;
+  @Mock private GifDrawable gifDrawable;
+  @Mock private Transformation<Bitmap> frameTransformation;
+  @Mock private Resource<Bitmap> transformedResource;
 
   private ReEncodingGifResourceEncoder encoder;
   private Options options;
@@ -74,7 +71,7 @@ public class ReEncodingGifResourceEncoderTest {
     when(factory.buildDecoder(any(GifDecoder.BitmapProvider.class))).thenReturn(decoder);
     when(factory.buildParser()).thenReturn(parser);
     when(factory.buildEncoder()).thenReturn(gifEncoder);
-    when(factory.buildFrameResource(any(Bitmap.class), any(BitmapPool.class)))
+    when(factory.buildFrameResource(anyBitmapOrNull(), any(BitmapPool.class)))
         .thenReturn(frameResource);
 
     // TODO Util.anyResource once Util is moved to testutil module (remove unchecked above!)
@@ -95,6 +92,8 @@ public class ReEncodingGifResourceEncoderTest {
 
   @After
   public void tearDown() {
+    // GC before delete() to release files on Windows (https://stackoverflow.com/a/4213208/253468)
+    System.gc();
     if (file.exists() && !file.delete()) {
       throw new RuntimeException("Failed to delete file");
     }
@@ -120,8 +119,6 @@ public class ReEncodingGifResourceEncoderTest {
   @Test
   public void testEncode_withEncodeTransformationFalse_writesSourceDataToStream()
       throws IOException {
-    // Most likely an instance of http://stackoverflow.com/q/991489/253468
-    assumeTrue(!System.getProperty("os.name").startsWith("Windows"));
     options.set(ReEncodingGifResourceEncoder.ENCODE_TRANSFORMATION, false);
     String expected = "testString";
     byte[] data = expected.getBytes("UTF-8");
@@ -134,7 +131,6 @@ public class ReEncodingGifResourceEncoderTest {
   @Test
   public void testEncode_WithEncodeTransformationFalse_whenOsThrows_returnsFalse()
       throws IOException {
-
     options.set(ReEncodingGifResourceEncoder.ENCODE_TRANSFORMATION, false);
     byte[] data = "testString".getBytes("UTF-8");
     when(gifDrawable.getBuffer()).thenReturn(ByteBuffer.wrap(data));
@@ -182,7 +178,7 @@ public class ReEncodingGifResourceEncoderTest {
   @Test
   public void testSetsDelayOnEncoderAfterAddingFrame() {
     when(gifEncoder.start(any(OutputStream.class))).thenReturn(true);
-    when(gifEncoder.addFrame(any(Bitmap.class))).thenReturn(true);
+    when(gifEncoder.addFrame(anyBitmapOrNull())).thenReturn(true);
 
     when(decoder.getFrameCount()).thenReturn(1);
     when(decoder.getNextFrame()).thenReturn(Bitmap.createBitmap(100, 100, Bitmap.Config.RGB_565));
@@ -195,7 +191,7 @@ public class ReEncodingGifResourceEncoderTest {
 
     InOrder order = inOrder(gifEncoder, decoder);
     order.verify(decoder).advance();
-    order.verify(gifEncoder).addFrame(any(Bitmap.class));
+    order.verify(gifEncoder).addFrame(anyBitmapOrNull());
     order.verify(gifEncoder).setDelay(eq(expectedDelay));
     order.verify(decoder).advance();
   }
@@ -222,7 +218,7 @@ public class ReEncodingGifResourceEncoderTest {
     when(decoder.getNextFrame()).thenReturn(Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888));
 
     when(gifEncoder.start(any(OutputStream.class))).thenReturn(true);
-    when(gifEncoder.addFrame(any(Bitmap.class))).thenReturn(false);
+    when(gifEncoder.addFrame(anyBitmapOrNull())).thenReturn(false);
 
     assertFalse(encoder.encode(resource, file, options));
   }
@@ -251,7 +247,7 @@ public class ReEncodingGifResourceEncoderTest {
     Bitmap transformedFrame = Bitmap.createBitmap(200, 200, Bitmap.Config.RGB_565);
     when(transformedResource.get()).thenReturn(transformedFrame);
     when(frameTransformation.transform(
-        anyContext(), eq(frameResource), eq(expectedWidth), eq(expectedHeight)))
+            anyContext(), eq(frameResource), eq(expectedWidth), eq(expectedHeight)))
         .thenReturn(transformedResource);
     when(gifDrawable.getFrameTransformation()).thenReturn(frameTransformation);
 
@@ -312,10 +308,7 @@ public class ReEncodingGifResourceEncoderTest {
   }
 
   @Test
-  public void testWritesBytesDirectlyToDiskIfTransformationIsUnitTransformation()
-      throws IOException {
-    // Most likely an instance of http://stackoverflow.com/q/991489/253468
-    assumeTrue(!System.getProperty("os.name").startsWith("Windows"));
+  public void testWritesBytesDirectlyToDiskIfTransformationIsUnitTransformation() {
     when(gifDrawable.getFrameTransformation()).thenReturn(UnitTransformation.<Bitmap>get());
     String expected = "expected";
     when(gifDrawable.getBuffer()).thenReturn(ByteBuffer.wrap(expected.getBytes()));
@@ -339,5 +332,9 @@ public class ReEncodingGifResourceEncoderTest {
 
   private static Context anyContext() {
     return any(Context.class);
+  }
+
+  private static Bitmap anyBitmapOrNull() {
+    return any();
   }
 }

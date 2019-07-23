@@ -1,17 +1,18 @@
 language: android
-sudo: required
+sudo: false
 dist: trusty
+
+before_install:
+  - mkdir "$ANDROID_HOME/licenses" || true
+  - echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e" > "$ANDROID_HOME/licenses/android-sdk-license"
+  - echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd\n504667f4c0de7af1a06de9f4b1727b84351f2910" > "$ANDROID_HOME/licenses/android-sdk-preview-license"
+  - yes | $ANDROID_HOME/tools/bin/sdkmanager "build-tools;28.0.3" "platforms;android-28"
 
 android:
   components:
-  - tools
-  - platform-tools
-  - tools
-  - build-tools-26.0.1
-  - android-26
-
-licenses:
-  - 'android-sdk-license.*'
+    # https://github.com/travis-ci/travis-ci/issues/6040#issuecomment-219367943
+    - tools
+    - tools
 
 jdk:
   - oraclejdk8
@@ -19,9 +20,6 @@ jdk:
 env:
   matrix:
     - COMPONENT=unit
-    - COMPONENT=firebase
-    - COMPONENT=instrumentation ANDROID_TARGET=16
-    - COMPONENT=instrumentation ANDROID_TARGET=22
     - COMPONENT=samples
 
 before_script:

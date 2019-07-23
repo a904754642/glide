@@ -11,11 +11,15 @@ import java.io.File;
  *
  * @deprecated use {@link ExternalPreferredCacheDiskCacheFactory} instead.
  */
+// Public API.
+@SuppressWarnings({"unused", "WeakerAccess"})
 @Deprecated
 public final class ExternalCacheDiskCacheFactory extends DiskLruCacheFactory {
 
   public ExternalCacheDiskCacheFactory(Context context) {
-    this(context, DiskCache.Factory.DEFAULT_DISK_CACHE_DIR,
+    this(
+        context,
+        DiskCache.Factory.DEFAULT_DISK_CACHE_DIR,
         DiskCache.Factory.DEFAULT_DISK_CACHE_SIZE);
   }
 
@@ -23,20 +27,22 @@ public final class ExternalCacheDiskCacheFactory extends DiskLruCacheFactory {
     this(context, DiskCache.Factory.DEFAULT_DISK_CACHE_DIR, diskCacheSize);
   }
 
-  public ExternalCacheDiskCacheFactory(final Context context, final String diskCacheName,
-      int diskCacheSize) {
-    super(new CacheDirectoryGetter() {
-      @Override
-      public File getCacheDirectory() {
-        File cacheDirectory = context.getExternalCacheDir();
-        if (cacheDirectory == null) {
-          return null;
-        }
-        if (diskCacheName != null) {
-          return new File(cacheDirectory, diskCacheName);
-        }
-        return cacheDirectory;
-      }
-    }, diskCacheSize);
+  public ExternalCacheDiskCacheFactory(
+      final Context context, final String diskCacheName, int diskCacheSize) {
+    super(
+        new CacheDirectoryGetter() {
+          @Override
+          public File getCacheDirectory() {
+            File cacheDirectory = context.getExternalCacheDir();
+            if (cacheDirectory == null) {
+              return null;
+            }
+            if (diskCacheName != null) {
+              return new File(cacheDirectory, diskCacheName);
+            }
+            return cacheDirectory;
+          }
+        },
+        diskCacheSize);
   }
 }

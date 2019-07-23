@@ -3,6 +3,7 @@ package com.bumptech.glide.load.engine.prefill;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
+import androidx.annotation.VisibleForTesting;
 import com.bumptech.glide.load.DecodeFormat;
 import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
 import com.bumptech.glide.load.engine.cache.MemoryCache;
@@ -11,8 +12,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * A class for pre-filling {@link android.graphics.Bitmap Bitmaps} in a
- * {@link com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool}.
+ * A class for pre-filling {@link android.graphics.Bitmap Bitmaps} in a {@link
+ * com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool}.
  */
 public final class BitmapPreFiller {
 
@@ -23,8 +24,8 @@ public final class BitmapPreFiller {
 
   private BitmapPreFillRunner current;
 
-  public BitmapPreFiller(MemoryCache memoryCache, BitmapPool bitmapPool,
-      DecodeFormat defaultFormat) {
+  public BitmapPreFiller(
+      MemoryCache memoryCache, BitmapPool bitmapPool, DecodeFormat defaultFormat) {
     this.memoryCache = memoryCache;
     this.bitmapPool = bitmapPool;
     this.defaultFormat = defaultFormat;
@@ -42,8 +43,8 @@ public final class BitmapPreFiller {
       if (builder.getConfig() == null) {
         builder.setConfig(
             defaultFormat == DecodeFormat.PREFER_ARGB_8888
-                || defaultFormat == DecodeFormat.PREFER_ARGB_8888_DISALLOW_HARDWARE
-            ? Bitmap.Config.ARGB_8888 : Bitmap.Config.RGB_565);
+                ? Bitmap.Config.ARGB_8888
+                : Bitmap.Config.RGB_565);
       }
       bitmapAttributes[i] = builder.build();
     }
@@ -53,9 +54,9 @@ public final class BitmapPreFiller {
     handler.post(current);
   }
 
-  // Visible for testing.
+  @VisibleForTesting
   PreFillQueue generateAllocationOrder(PreFillType... preFillSizes) {
-    final int maxSize =
+    final long maxSize =
         memoryCache.getMaxSize() - memoryCache.getCurrentSize() + bitmapPool.getMaxSize();
 
     int totalWeight = 0;
@@ -80,4 +81,3 @@ public final class BitmapPreFiller {
     return Util.getBitmapByteSize(size.getWidth(), size.getHeight(), size.getConfig());
   }
 }
-

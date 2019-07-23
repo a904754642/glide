@@ -9,4 +9,5 @@ set -e
   -x :samples:gallery:build \
   -x :samples:imgur:build \
   -x :samples:svg:build \
-  -x testReleaseUnitTest --parallel
+  --parallel
+./gradlew :instrumentation:assembleAndroidTest

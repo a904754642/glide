@@ -3,17 +3,15 @@ package com.bumptech.glide.load.resource.drawable;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.pm.PackageManager.NameNotFoundException;
-import android.graphics.drawable.BitmapDrawable;
+import android.content.res.Resources;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
-import android.support.annotation.DrawableRes;
-import android.support.annotation.NonNull;
+import androidx.annotation.DrawableRes;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import com.bumptech.glide.load.Options;
 import com.bumptech.glide.load.ResourceDecoder;
 import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
-import com.bumptech.glide.load.resource.bitmap.BitmapDrawableResource;
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -25,6 +23,18 @@ import java.util.List;
  * other packages.
  */
 public class ResourceDrawableDecoder implements ResourceDecoder<Uri, Drawable> {
+  /**
+   * The package name to provide {@link Resources#getIdentifier(String, String, String)} when trying
+   * to find system resource ids.
+   *
+   * <p>As far as I can tell this is undocumented, but works.
+   */
+  private static final String ANDROID_PACKAGE_NAME = "android";
+  /**
+   * {@link Resources#getIdentifier(String, String, String)} documents that it will return 0 and
+   * that 0 is not a valid resouce id.
+   */
+  private static final int MISSING_RESOURCE_ID = 0;
   // android.resource://<package_name>/<type>/<name>.
   private static final int NAME_URI_PATH_SEGMENTS = 2;
   private static final int TYPE_PATH_SEGMENT_INDEX = 0;
@@ -34,98 +44,85 @@ public class ResourceDrawableDecoder implements ResourceDecoder<Uri, Drawable> {
   private static final int RESOURCE_ID_SEGMENT_INDEX = 0;
 
   private final Context context;
-  private final BitmapPool bitmapPool;
 
-  public ResourceDrawableDecoder(Context context, BitmapPool bitmapPool) {
+  public ResourceDrawableDecoder(Context context) {
     this.context = context.getApplicationContext();
-    this.bitmapPool = bitmapPool;
   }
 
   @Override
-  public boolean handles(Uri source, Options options) throws IOException {
+  public boolean handles(@NonNull Uri source, @NonNull Options options) {
     return source.getScheme().equals(ContentResolver.SCHEME_ANDROID_RESOURCE);
   }
 
-  @NonNull
+  @Nullable
   @Override
-  public Resource<Drawable> decode(Uri source, int width, int height, Options options)
-      throws IOException {
-    @DrawableRes int resId = loadResourceIdFromUri(source);
+  public Resource<Drawable> decode(
+      @NonNull Uri source, int width, int height, @NonNull Options options) {
     String packageName = source.getAuthority();
-    Context toUse = packageName.equals(context.getPackageName())
-        ? context : getContextForPackage(source, packageName);
+    Context targetContext = findContextForPackage(source, packageName);
+    @DrawableRes int resId = findResourceIdFromUri(targetContext, source);
     // We can't get a theme from another application.
-    Drawable drawable = DrawableDecoderCompat.getDrawable(toUse, resId);
-    return getDrawableResource(drawable);
-  }
-
-  @SuppressWarnings("unchecked")
-  private Resource<Drawable> getDrawableResource(Drawable drawable) {
-   if (drawable instanceof BitmapDrawable) {
-      BitmapDrawable bitmapDrawable = (BitmapDrawable) drawable;
-      return (Resource<Drawable>) (Resource<? extends Drawable>)
-          new BitmapDrawableResource(bitmapDrawable, bitmapPool);
-    }
-    return new InternalDrawableResource(drawable);
+    Drawable drawable = DrawableDecoderCompat.getDrawable(context, targetContext, resId);
+    return NonOwnedDrawableResource.newInstance(drawable);
   }
 
   @NonNull
-  private Context getContextForPackage(Uri source, String packageName) {
+  private Context findContextForPackage(Uri source, String packageName) {
+    // Fast path
+    if (packageName.equals(context.getPackageName())) {
+      return context;
+    }
+
     try {
       return context.createPackageContext(packageName, /*flags=*/ 0);
     } catch (NameNotFoundException e) {
+      // The parent APK holds the correct context if the resource is located in a split
+      if (packageName.contains(context.getPackageName())) {
+        return context;
+      }
+
       throw new IllegalArgumentException(
           "Failed to obtain context or unrecognized Uri format for: " + source, e);
     }
   }
 
   @DrawableRes
-  private int loadResourceIdFromUri(Uri source) {
+  private int findResourceIdFromUri(Context context, Uri source) {
     List<String> segments = source.getPathSegments();
-    @DrawableRes Integer result = null;
     if (segments.size() == NAME_URI_PATH_SEGMENTS) {
-       String packageName = source.getAuthority();
-       String typeName = segments.get(TYPE_PATH_SEGMENT_INDEX);
-       String resourceName = segments.get(NAME_PATH_SEGMENT_INDEX);
-       result = context.getResources().getIdentifier(resourceName, typeName, packageName);
+      return findResourceIdFromTypeAndNameResourceUri(context, source);
     } else if (segments.size() == ID_PATH_SEGMENTS) {
-       try {
-         result = Integer.valueOf(segments.get(RESOURCE_ID_SEGMENT_INDEX));
-       } catch (NumberFormatException e) {
-         // Ignored.
-       }
-     }
-
-     if (result == null) {
-       throw new IllegalArgumentException("Unrecognized Uri format: " + source);
-     } else if (result == 0) {
-       throw new IllegalArgumentException("Failed to obtain resource id for: " + source);
-     }
-     return result;
+      return findResourceIdFromResourceIdUri(source);
+    } else {
+      throw new IllegalArgumentException("Unrecognized Uri format: " + source);
+    }
   }
 
-  private static final class InternalDrawableResource extends DrawableResource<Drawable> {
-
-    InternalDrawableResource(Drawable drawable) {
-      super(drawable);
+  // android.resource://com.android.camera2/mipmap/logo_camera_color
+  @DrawableRes
+  private int findResourceIdFromTypeAndNameResourceUri(Context context, Uri source) {
+    List<String> segments = source.getPathSegments();
+    String packageName = source.getAuthority();
+    String typeName = segments.get(TYPE_PATH_SEGMENT_INDEX);
+    String resourceName = segments.get(NAME_PATH_SEGMENT_INDEX);
+    int result = context.getResources().getIdentifier(resourceName, typeName, packageName);
+    if (result == MISSING_RESOURCE_ID) {
+      result = Resources.getSystem().getIdentifier(resourceName, typeName, ANDROID_PACKAGE_NAME);
     }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public Class<Drawable> getResourceClass() {
-      return (Class<Drawable>) drawable.getClass();
+    if (result == MISSING_RESOURCE_ID) {
+      throw new IllegalArgumentException("Failed to find resource id for: " + source);
     }
+    return result;
+  }
 
-    @Override
-    public int getSize() {
-      // 4 bytes per pixel for ARGB_8888 Bitmaps is something of a reasonable approximation. If
-      // there are no intrinsic bounds, we can fall back just to 1.
-      return Math.max(1, drawable.getIntrinsicWidth() * drawable.getIntrinsicHeight() * 4);
-    }
-
-    @Override
-    public void recycle() {
-      // Do nothing.
+  // android.resource://com.android.camera2/123456
+  @DrawableRes
+  private int findResourceIdFromResourceIdUri(Uri source) {
+    List<String> segments = source.getPathSegments();
+    try {
+      return Integer.parseInt(segments.get(RESOURCE_ID_SEGMENT_INDEX));
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("Unrecognized Uri format: " + source, e);
     }
   }
 }

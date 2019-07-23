@@ -4,9 +4,9 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import androidx.annotation.NonNull;
 import com.bumptech.glide.load.Transformation;
 import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
 import com.bumptech.glide.util.Preconditions;
 import java.security.MessageDigest;
 
@@ -20,35 +20,20 @@ public class BitmapDrawableTransformation implements Transformation<BitmapDrawab
 
   private final Transformation<Drawable> wrapped;
 
+  // Public API.
+  @SuppressWarnings("WeakerAccess")
   public BitmapDrawableTransformation(Transformation<Bitmap> wrapped) {
-    this.wrapped = Preconditions.checkNotNull(new DrawableTransformation(wrapped));
+    this.wrapped =
+        Preconditions.checkNotNull(new DrawableTransformation(wrapped, /*isRequired=*/ false));
   }
 
-  /**
-   * @deprecated use {@link #BitmapDrawableTransformation(Transformation)}}
-   */
-  @Deprecated
-  public BitmapDrawableTransformation(
-      @SuppressWarnings("unused") Context context, Transformation<Bitmap> wrapped) {
-    this(wrapped);
-  }
-
-  /**
-   * @deprecated use {@link #BitmapDrawableTransformation(Transformation)}}
-   */
-  @Deprecated
-  public BitmapDrawableTransformation(
-      @SuppressWarnings("unused") Context context,
-      @SuppressWarnings("unused") BitmapPool bitmapPool,
-      Transformation<Bitmap> wrapped) {
-    this(wrapped);
-  }
-
+  @NonNull
   @Override
   public Resource<BitmapDrawable> transform(
-      Context context, Resource<BitmapDrawable> drawableResourceToTransform, int outWidth,
+      @NonNull Context context,
+      @NonNull Resource<BitmapDrawable> drawableResourceToTransform,
+      int outWidth,
       int outHeight) {
-
     Resource<Drawable> toTransform = convertToDrawableResource(drawableResourceToTransform);
     Resource<Drawable> transformed = wrapped.transform(context, toTransform, outWidth, outHeight);
     return convertToBitmapDrawableResource(transformed);
@@ -66,11 +51,11 @@ public class BitmapDrawableTransformation implements Transformation<BitmapDrawab
   }
 
   @SuppressWarnings("unchecked")
-  private static Resource<Drawable> convertToDrawableResource(
-      Resource<BitmapDrawable> toConvert) {
+  private static Resource<Drawable> convertToDrawableResource(Resource<BitmapDrawable> toConvert) {
     return (Resource<Drawable>) (Resource<? extends Drawable>) toConvert;
   }
 
+  @SuppressWarnings("deprecation")
   @Override
   public boolean equals(Object o) {
     if (o instanceof BitmapDrawableTransformation) {
@@ -86,7 +71,7 @@ public class BitmapDrawableTransformation implements Transformation<BitmapDrawab
   }
 
   @Override
-  public void updateDiskCacheKey(MessageDigest messageDigest) {
+  public void updateDiskCacheKey(@NonNull MessageDigest messageDigest) {
     wrapped.updateDiskCacheKey(messageDigest);
   }
 }

@@ -1,24 +1,26 @@
 package com.bumptech.glide.request;
 
-import android.support.annotation.Nullable;
+import androidx.annotation.Nullable;
+import androidx.annotation.VisibleForTesting;
 
 /**
  * A coordinator that coordinates two individual {@link Request}s that load a small thumbnail
  * version of an image and the full size version of the image at the same time.
  */
-public class ThumbnailRequestCoordinator implements RequestCoordinator,
-    Request {
+public class ThumbnailRequestCoordinator implements RequestCoordinator, Request {
+  @Nullable private final RequestCoordinator parent;
+
   private Request full;
   private Request thumb;
-  @Nullable private RequestCoordinator coordinator;
   private boolean isRunning;
 
-  public ThumbnailRequestCoordinator() {
-    this(null);
+  @VisibleForTesting
+  ThumbnailRequestCoordinator() {
+    this(/*parent=*/ null);
   }
 
-  public ThumbnailRequestCoordinator(RequestCoordinator coordinator) {
-    this.coordinator = coordinator;
+  public ThumbnailRequestCoordinator(@Nullable RequestCoordinator parent) {
+    this.parent = parent;
   }
 
   public void setRequests(Request full, Request thumb) {
@@ -38,7 +40,7 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
   }
 
   private boolean parentCanSetImage() {
-    return coordinator == null || coordinator.canSetImage(this);
+    return parent == null || parent.canSetImage(this);
   }
 
   /**
@@ -52,8 +54,17 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
     return parentCanNotifyStatusChanged() && request.equals(full) && !isAnyResourceSet();
   }
 
+  @Override
+  public boolean canNotifyCleared(Request request) {
+    return parentCanNotifyCleared() && request.equals(full);
+  }
+
+  private boolean parentCanNotifyCleared() {
+    return parent == null || parent.canNotifyCleared(this);
+  }
+
   private boolean parentCanNotifyStatusChanged() {
-    return coordinator == null || coordinator.canNotifyStatusChanged(this);
+    return parent == null || parent.canNotifyStatusChanged(this);
   }
 
   @Override
@@ -66,8 +77,8 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
     if (request.equals(thumb)) {
       return;
     }
-    if (coordinator != null) {
-      coordinator.onRequestSuccess(this);
+    if (parent != null) {
+      parent.onRequestSuccess(this);
     }
     // Clearing the thumb is not necessarily safe if the thumb is being displayed in the Target,
     // as a layer in a cross fade for example. The only way we know the thumb is not being
@@ -83,34 +94,27 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
       return;
     }
 
-    if (coordinator != null) {
-      coordinator.onRequestFailed(this);
+    if (parent != null) {
+      parent.onRequestFailed(this);
     }
   }
 
   private boolean parentIsAnyResourceSet() {
-    return coordinator != null && coordinator.isAnyResourceSet();
+    return parent != null && parent.isAnyResourceSet();
   }
 
-  /**
-   * Starts first the thumb request and then the full request.
-   */
+  /** Starts first the thumb request and then the full request. */
   @Override
   public void begin() {
     isRunning = true;
-    if (!thumb.isRunning()) {
+    // If the request has completed previously, there's no need to restart both the full and the
+    // thumb, we can just restart the full.
+    if (!full.isComplete() && !thumb.isRunning()) {
       thumb.begin();
     }
     if (isRunning && !full.isRunning()) {
       full.begin();
     }
-  }
-
-  @Override
-  public void pause() {
-    isRunning = false;
-    full.pause();
-    thumb.pause();
   }
 
   @Override
@@ -120,22 +124,13 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
     full.clear();
   }
 
-  @Override
-  public boolean isPaused() {
-    return full.isPaused();
-  }
-
-  /**
-   * Returns true if the full request is still running.
-   */
+  /** Returns true if the full request is still running. */
   @Override
   public boolean isRunning() {
     return full.isRunning();
   }
 
-  /**
-   * Returns true if the full request is complete.
-   */
+  /** Returns true if the full request is complete. */
   @Override
   public boolean isComplete() {
     return full.isComplete() || thumb.isComplete();
@@ -147,13 +142,11 @@ public class ThumbnailRequestCoordinator implements RequestCoordinator,
   }
 
   @Override
-  public boolean isCancelled() {
-    return full.isCancelled();
+  public boolean isCleared() {
+    return full.isCleared();
   }
 
-  /**
-   * Returns true if the full request has failed.
-   */
+  /** Returns true if the full request has failed. */
   @Override
   public boolean isFailed() {
     return full.isFailed();

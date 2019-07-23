@@ -5,47 +5,70 @@ import android.graphics.Canvas;
 import android.graphics.drawable.Animatable;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.support.annotation.Nullable;
+import android.util.Log;
+import androidx.annotation.Nullable;
+import com.bumptech.glide.load.engine.Resource;
 import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPoolAdapter;
 import com.bumptech.glide.request.target.Target;
 import java.util.concurrent.locks.Lock;
 
 final class DrawableToBitmapConverter {
+  private static final String TAG = "DrawableToBitmap";
+  private static final BitmapPool NO_RECYCLE_BITMAP_POOL =
+      new BitmapPoolAdapter() {
+        @Override
+        public void put(Bitmap bitmap) {
+          // Avoid calling super to avoid recycling the given Bitmap.
+        }
+      };
+
   private DrawableToBitmapConverter() {
     // Utility class.
   }
 
-  static boolean willDraw(Drawable drawable) {
-    return !(drawable.getCurrent() instanceof BitmapDrawable);
-  }
-
   @Nullable
-  static Bitmap convert(BitmapPool bitmapPool, Drawable drawable, int width, int height) {
+  static Resource<Bitmap> convert(BitmapPool bitmapPool, Drawable drawable, int width, int height) {
     // Handle DrawableContainer or StateListDrawables that may contain one or more BitmapDrawables.
     drawable = drawable.getCurrent();
     Bitmap result = null;
+    boolean isRecycleable = false;
     if (drawable instanceof BitmapDrawable) {
       result = ((BitmapDrawable) drawable).getBitmap();
     } else if (!(drawable instanceof Animatable)) {
       result = drawToBitmap(bitmapPool, drawable, width, height);
+      // We created and drew to the Bitmap, so it's safe for us to recycle or re-use.
+      isRecycleable = true;
     }
 
-    if (result == null) {
-      return null;
-    }
-
-    return result;
+    BitmapPool toUse = isRecycleable ? bitmapPool : NO_RECYCLE_BITMAP_POOL;
+    return BitmapResource.obtain(result, toUse);
   }
 
+  @Nullable
   private static Bitmap drawToBitmap(
       BitmapPool bitmapPool, Drawable drawable, int width, int height) {
     if (width == Target.SIZE_ORIGINAL && drawable.getIntrinsicWidth() <= 0) {
-      throw new IllegalArgumentException("Unable to draw " + drawable + " to Bitmap with "
-          + "Target.SIZE_ORIGINAL because the Drawable has no intrinsic width");
+      if (Log.isLoggable(TAG, Log.WARN)) {
+        Log.w(
+            TAG,
+            "Unable to draw "
+                + drawable
+                + " to Bitmap with Target.SIZE_ORIGINAL because the"
+                + " Drawable has no intrinsic width");
+      }
+      return null;
     }
     if (height == Target.SIZE_ORIGINAL && drawable.getIntrinsicHeight() <= 0) {
-      throw new IllegalArgumentException("Unable to draw " + drawable + " to Bitmap with "
-          + "Target.SIZE_ORIGINAL because the Drawable has no intrinsic height");
+      if (Log.isLoggable(TAG, Log.WARN)) {
+        Log.w(
+            TAG,
+            "Unable to draw "
+                + drawable
+                + " to Bitmap with Target.SIZE_ORIGINAL because the"
+                + " Drawable has no intrinsic height");
+      }
+      return null;
     }
     int targetWidth = drawable.getIntrinsicWidth() > 0 ? drawable.getIntrinsicWidth() : width;
     int targetHeight = drawable.getIntrinsicHeight() > 0 ? drawable.getIntrinsicHeight() : height;
